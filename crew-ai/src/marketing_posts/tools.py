@@ -59,7 +59,9 @@ class DuckDuckGoSearchTool(BaseTool):
             from duckduckgo_search import DDGS
 
             with DDGS() as ddgs:
-                results = list(ddgs.text(query, max_results=10))
+                # Use region="wt-wt" for worldwide English results
+                # or "us-en" for US English specifically
+                results = list(ddgs.text(query, region="wt-wt", max_results=10))
 
             if not results:
                 return (
