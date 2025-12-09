@@ -3,28 +3,39 @@ services:
     build:
       context: .
     environment:
-      - MCP_SERVER_URL=http://mcp-gateway:8811/sse
+      - MCP_SERVER_URL=http://mcp-gateway:8000/sse
     restart: "no"
     depends_on:
-      - mcp-gateway
+      mcp-gateway:
+        condition: service_healthy
     models:
-      qwen3:
+      gemma3:
         endpoint_var: MODEL_RUNNER_URL
         model_var: MODEL_RUNNER_MODEL
 
   mcp-gateway:
-    # mcp-gateway secures your MCP servers
-    image: docker/mcp-gateway:latest
-    use_api_socket: true
+    # Using supergateway to wrap the duckduckgo MCP server with SSE transport
+    # This works around the docker/mcp-gateway container limitation
+    # See: https://github.com/supercorp-ai/supergateway
+    image: supercorp/supergateway:uvx
     command:
-      - --transport=sse
-      # add any MCP servers you want to use
-      - --servers=duckduckgo
-      - --tools=search,fetch_content
+      - --stdio
+      - uvx duckduckgo-mcp-server
+      - --port
+      - "8000"
+      - --host
+      - "0.0.0.0"
+      - --cors
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/sse"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
 
 models:
-  qwen3:
-    model: ai/qwen3
+  gemma3:
+    model: ai/gemma3:4B-Q4_0
     context_size: 8192
     runtime_flags:
       - --no-prefill-assistant

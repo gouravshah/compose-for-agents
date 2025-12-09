@@ -28,6 +28,6 @@ models:
   gemma3:
     # pre-pull the model when starting Docker Model Runner
     model: ai/gemma3:4B-Q4_0
-    context_size: 10000  # 3.5 GB VRAM
+    context_size: 20000  # 3.5 GB VRAM
     # increase context size to handle search results
     # context_size: 131000  # 7.6 GB VRAM
