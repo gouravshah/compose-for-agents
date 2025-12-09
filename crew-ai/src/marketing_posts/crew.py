@@ -59,6 +59,9 @@ class MarketingPostsCrew:
             config=self.agents_config["lead_market_analyst"],  # type: ignore
             tools=get_tools(),
             verbose=True,
+            function_calling_llm=False,  # Disable native function calling for Gemma3 compatibility
+            max_iter=5,  # Limit iterations to avoid message format issues
+            respect_context_window=True,
         )
 
     @agent
@@ -67,6 +70,9 @@ class MarketingPostsCrew:
             config=self.agents_config["chief_marketing_strategist"],  # type: ignore
             tools=get_tools(),
             verbose=True,
+            function_calling_llm=False,  # Disable native function calling for Gemma3 compatibility
+            max_iter=5,  # Limit iterations to avoid message format issues
+            respect_context_window=True,
         )
 
     @agent
@@ -74,6 +80,9 @@ class MarketingPostsCrew:
         return Agent(
             config=self.agents_config["creative_content_creator"],  # type: ignore
             verbose=True,
+            function_calling_llm=False,  # Disable native function calling for Gemma3 compatibility
+            max_iter=5,  # Limit iterations to avoid message format issues
+            respect_context_window=True,
         )
 
     @task
@@ -95,7 +104,7 @@ class MarketingPostsCrew:
         return Task(
             config=self.tasks_config["marketing_strategy_task"],  # type: ignore
             agent=self.chief_marketing_strategist(),
-            output_json=MarketStrategy,
+            # Removed output_json for Gemma3 compatibility - smaller models struggle with strict JSON
         )
 
     @task
@@ -103,7 +112,7 @@ class MarketingPostsCrew:
         return Task(
             config=self.tasks_config["campaign_idea_task"],  # type: ignore
             agent=self.creative_content_creator(),
-            output_json=CampaignIdeas,
+            # Removed output_json for Gemma3 compatibility - smaller models struggle with strict JSON
         )
 
     @task
@@ -112,7 +121,7 @@ class MarketingPostsCrew:
             config=self.tasks_config["copy_creation_task"],  # type: ignore
             agent=self.creative_content_creator(),
             context=[self.marketing_strategy_task(), self.campaign_idea_task()],
-            output_json=Copy,
+            # Removed output_json for Gemma3 compatibility - smaller models struggle with strict JSON
         )
 
     @crew

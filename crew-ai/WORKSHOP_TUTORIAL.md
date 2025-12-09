@@ -483,6 +483,47 @@ OOM killed
 - Increase Docker Desktop memory allocation
 - Use a smaller model variant
 
+### Issue: "Cannot have 2 or more assistant messages at the end of the list"
+
+**Symptom:**
+```
+Error code: 400 - {'error': {'code': 400, 'message': 'Cannot have 2 or more assistant messages at the end of the list.'}}
+```
+
+**Explanation:**
+Docker Model Runner validates message sequences and rejects requests with consecutive assistant messages. This can occur during complex CrewAI agent interactions with tool calls.
+
+**Solution:**
+The project includes a message sanitizer (`src/marketing_posts/custom_llm.py`) that automatically merges consecutive assistant messages before sending to the model. This is installed at startup in `main.py`.
+
+### Issue: "Invalid content type" Error with Gemma3
+
+**Symptom:**
+```
+Error code: 500 - Invalid content type at row 39, column 51
+```
+
+**Explanation:**
+Some models (like Gemma3) have chat templates that expect message content to be a string, but LiteLLM may send content as arrays (multi-part content format).
+
+**Solution:**
+1. Use the `hosted_vllm/` model prefix instead of `openai/` in the Dockerfile
+2. Set `function_calling_llm=False` on agents to force ReAct pattern
+3. The project's `StringifyingToolWrapper` in `tools.py` ensures tool outputs are always strings
+
+### Issue: Pydantic Validation Errors on Task Output
+
+**Symptom:**
+```
+pydantic_core._pydantic_core.ValidationError: 1 validation error for TaskOutput
+```
+
+**Explanation:**
+Smaller local models like Gemma3 may struggle to produce strictly formatted JSON output that matches Pydantic schemas.
+
+**Solution:**
+The project has removed `output_json` constraints from tasks to allow free-form text output, which works better with smaller models. If you need structured output, consider using a larger model or post-processing the results
+
 ---
 
 ## Summary

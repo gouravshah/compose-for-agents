@@ -7,10 +7,14 @@ from typing import Any
 import yaml
 
 from marketing_posts.crew import MarketingPostsCrew
+from marketing_posts.custom_llm import install_message_sanitizer
 
 input_yaml = os.path.join(os.path.dirname(__file__), "config", "input.yaml")
 
 logging.getLogger("LiteLLM").setLevel(logging.WARNING)
+
+# Install message sanitizer to fix Docker Model Runner compatibility
+install_message_sanitizer()
 
 
 def parse_input() -> dict[str, Any]:
