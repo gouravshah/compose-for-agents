@@ -2,36 +2,17 @@ services:
   agents:
     build:
       context: .
-    environment:
-      - MCP_SERVER_URL=http://mcp-gateway:8000/sse
+    # No MCP_SERVER_URL means we use the duckduckgo-search Python library directly,
+    # which is more reliable than the MCP server approach (avoids bot detection issues).
+    # To use Tavily instead (requires API key), set:
+    #   MCP_SERVER_URL=https://mcp.tavily.com/mcp/?tavilyApiKey=YOUR_KEY
+    # To use Serper (Google search, requires API key), set:
+    #   SERPER_API_KEY=your_key
     restart: "no"
-    depends_on:
-      mcp-gateway:
-        condition: service_healthy
     models:
       gemma3:
         endpoint_var: MODEL_RUNNER_URL
         model_var: MODEL_RUNNER_MODEL
-
-  mcp-gateway:
-    # Using supergateway to wrap the duckduckgo MCP server with SSE transport
-    # This works around the docker/mcp-gateway container limitation
-    # See: https://github.com/supercorp-ai/supergateway
-    image: supercorp/supergateway:uvx
-    command:
-      - --stdio
-      - uvx duckduckgo-mcp-server
-      - --port
-      - "8000"
-      - --host
-      - "0.0.0.0"
-      - --cors
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/sse"]
-      interval: 5s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
 
 models:
   gemma3:

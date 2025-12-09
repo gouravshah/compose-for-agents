@@ -111,7 +111,7 @@ flowchart TD
     end
 
     subgraph AI Tools
-      MCP[(MCP Gateway<br/>DuckDuckGo Search)]
+      Search[(DuckDuckGo Search<br/>Python Library)]
       LLM[(Docker Model Runner<br/>LLM Inference)]
     end
 
@@ -124,8 +124,8 @@ flowchart TD
     T4 -->|assigned to| A3
     T5 -->|assigned to| A3
 
-    A1 --> MCP
-    A2 --> MCP
+    A1 --> Search
+    A2 --> Search
 
     A1 --> LLM
     A2 --> LLM

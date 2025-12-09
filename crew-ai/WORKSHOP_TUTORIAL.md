@@ -1,8 +1,8 @@
 # Advanced Docker for Agentic AI Workshop
 
-## Building AI Agent Applications with Docker Compose, MCP, and Local LLMs
+## Building AI Agent Applications with Docker Compose and Local LLMs
 
-This tutorial demonstrates how to build and run a multi-agent AI application using Docker Compose with advanced features like Model Context Protocol (MCP), Docker Model Runner, and CrewAI.
+This tutorial demonstrates how to build and run a multi-agent AI application using Docker Compose with Docker Model Runner and CrewAI.
 
 ---
 
@@ -15,7 +15,7 @@ This tutorial demonstrates how to build and run a multi-agent AI application usi
 5. [Understanding the Components](#understanding-the-components)
 6. [Step-by-Step: Running the Application](#step-by-step-running-the-application)
 7. [Deep Dive: Docker Compose Extensions](#deep-dive-docker-compose-extensions)
-8. [Deep Dive: MCP Gateway](#deep-dive-mcp-gateway)
+8. [Deep Dive: Search Tools](#deep-dive-search-tools)
 9. [Deep Dive: CrewAI Agents](#deep-dive-crewai-agents)
 10. [Troubleshooting](#troubleshooting)
 
@@ -27,8 +27,7 @@ This project showcases a **marketing content generation system** powered by:
 
 - **CrewAI**: A multi-agent AI framework that orchestrates specialized AI agents
 - **Docker Model Runner**: Local LLM inference using Docker Desktop
-- **MCP (Model Context Protocol)**: A standardized protocol for AI tool access
-- **MCP Gateway**: A proxy that provides AI agents access to external tools (like web search)
+- **DuckDuckGo Search**: Web search capabilities via the `duckduckgo-search` Python library
 
 The system creates marketing posts by coordinating three AI agents:
 1. **Lead Market Analyst** - Researches market trends
@@ -79,28 +78,29 @@ docker model list
 │                      Docker Compose Stack                        │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│  ┌──────────────────┐         ┌──────────────────────────────┐  │
-│  │                  │   SSE   │                              │  │
-│  │  agents          │◄───────►│  mcp-gateway                 │  │
-│  │  (CrewAI)        │         │  (supergateway)              │  │
-│  │                  │         │                              │  │
-│  └────────┬─────────┘         └──────────────────────────────┘  │
-│           │                                                      │
-│           │ OpenAI-compatible API                                │
-│           ▼                                                      │
-│  ┌──────────────────┐                                           │
-│  │  Docker Model    │                                           │
-│  │  Runner          │                                           │
-│  │  (gemma3:4B)     │                                           │
-│  └──────────────────┘                                           │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                                                          │   │
+│  │  agents (CrewAI)                                         │   │
+│  │  ┌─────────────────┐  ┌─────────────────────────────┐   │   │
+│  │  │ DuckDuckGo      │  │ Web Fetch Tool              │   │   │
+│  │  │ Search Tool     │  │ (URL content extraction)    │   │   │
+│  │  └─────────────────┘  └─────────────────────────────┘   │   │
+│  │                                                          │   │
+│  └────────────────────────┬─────────────────────────────────┘   │
+│                           │                                      │
+│                           │ OpenAI-compatible API                │
+│                           ▼                                      │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │  Docker Model Runner (gemma3:4B)                         │   │
+│  └──────────────────────────────────────────────────────────┘   │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 **Data Flow:**
 1. CrewAI agents receive tasks and need to search the web
-2. Agents call MCP tools via the MCP Gateway (SSE endpoint)
-3. MCP Gateway routes requests to duckduckgo-mcp-server
+2. Agents use the built-in DuckDuckGo search tool (Python library)
+3. Agents can fetch and parse content from URLs using the fetch tool
 4. Agents use Docker Model Runner for LLM inference (gemma3)
 5. Agents coordinate to produce marketing content
 
@@ -138,40 +138,18 @@ services:
   agents:
     build:
       context: .
-    environment:
-      - MCP_SERVER_URL=http://mcp-gateway:8000/sse
+    # Search tools are built-in using duckduckgo-search Python library
+    # No external MCP server needed - simpler and more reliable
     restart: "no"
-    depends_on:
-      mcp-gateway:
-        condition: service_healthy
     models:
       gemma3:
         endpoint_var: MODEL_RUNNER_URL
         model_var: MODEL_RUNNER_MODEL
 
-  mcp-gateway:
-    image: supercorp/supergateway:uvx
-    command:
-      - --stdio
-      - uvx duckduckgo-mcp-server
-      - --port
-      - "8000"
-      - --host
-      - "0.0.0.0"
-      - --cors
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/sse"]
-      interval: 5s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-
 models:
   gemma3:
     model: ai/gemma3:4B-Q4_0
     context_size: 8192
-    runtime_flags:
-      - --no-prefill-assistant
 ```
 
 **Key Docker Desktop Extensions:**
@@ -183,25 +161,15 @@ models:
 | `endpoint_var` | Environment variable name for the LLM API URL |
 | `model_var` | Environment variable name for the model name |
 | `context_size` | Maximum context window for the model |
-| `runtime_flags` | Additional flags for model runner |
 
-### 2. The MCP Gateway
+### 2. Built-in Search Tools
 
-The MCP Gateway provides AI agents access to external tools via a standardized protocol.
+The agents use built-in search tools implemented in Python:
 
-**Why Supergateway?**
+- **DuckDuckGo Search Tool**: Uses the `duckduckgo-search` library for web searches
+- **Web Fetch Tool**: Extracts text content from URLs
 
-The `docker/mcp-gateway` image is designed to work with Docker Desktop's internal APIs, which aren't available when running as a standalone container. We use `supercorp/supergateway` as an alternative that:
-
-- Wraps stdio-based MCP servers with SSE transport
-- Works as a standard container without special privileges
-- Supports any MCP server that uses stdio transport
-
-**How it works:**
-```
-Agent → SSE Request → Supergateway → stdio → duckduckgo-mcp-server
-                                    ←      ←
-```
+This approach is simpler and more reliable than using external MCP servers, which can experience rate limiting or bot detection issues.
 
 ### 3. CrewAI Agent Architecture
 
@@ -221,16 +189,24 @@ CrewAI orchestrates multiple specialized AI agents:
 
 ### 4. Tool Provider (`tools.py`)
 
-The application dynamically selects tools based on configuration:
+The application provides flexible tool selection:
 
 ```python
 def get_tools() -> list[BaseTool]:
+    """
+    Tool selection priority:
+    1. MCP_SERVER_URL - Uses MCP server (Tavily or other)
+    2. SERPER_API_KEY - Uses Serper for Google search
+    3. Default - Uses DuckDuckGo Python library directly (no API key needed)
+    """
     if os.getenv("MCP_SERVER_URL"):
-        return _get_tools_mcp()    # Use MCP tools
-    return _get_tools_crewai()      # Use CrewAI native tools
+        return _get_tools_mcp()
+    if os.getenv("SERPER_API_KEY"):
+        return _get_tools_crewai()
+    return _get_tools_duckduckgo()  # Default: no API key needed
 ```
 
-When `MCP_SERVER_URL` is set, agents use tools from the MCP Gateway (duckduckgo search). Otherwise, they fall back to CrewAI's built-in tools (requires API keys).
+By default (no environment variables set), agents use the built-in DuckDuckGo search tool, which requires no API keys or external services.
 
 ---
 
@@ -267,13 +243,9 @@ docker compose up --build
 2. The `models:` section triggers Docker Model Runner to:
    - Pull `ai/gemma3:4B-Q4_0` if not already present
    - Start the model with specified context size
-3. The `mcp-gateway` service starts:
-   - Runs supergateway with duckduckgo-mcp-server
-   - Exposes SSE endpoint on port 8000
-   - Healthcheck ensures it's ready before agents start
-4. The `agents` service starts:
+3. The `agents` service starts:
    - Receives `MODEL_RUNNER_URL` and `MODEL_RUNNER_MODEL` environment variables
-   - Receives `MCP_SERVER_URL` pointing to the gateway
+   - Loads built-in DuckDuckGo search and web fetch tools
    - CrewAI initializes and runs the marketing workflow
 
 ### Step 4: Watch the Output
@@ -281,11 +253,12 @@ docker compose up --build
 You'll see the agents working through their tasks:
 
 ```
-agents-1       | Available MCP tools ['search']
 agents-1       | # Agent: Lead Market Analyst
 agents-1       | ## Task: Conduct market research...
 agents-1       | ## Using tool: search
 agents-1       | ## Tool Input: {"query": "crewai market trends 2024"}
+agents-1       | ## Tool Output: 1. **CrewAI vs AutoGen? - Reddit**
+agents-1       |                    URL: https://www.reddit.com/r/AI_Agents/...
 ...
 ```
 
@@ -348,45 +321,56 @@ This injects environment variables into the container:
 
 ---
 
-## Deep Dive: MCP Gateway
+## Deep Dive: Search Tools
 
-### What is MCP?
+### Built-in Tools
 
-**Model Context Protocol (MCP)** is a standardized protocol that allows AI applications to access external tools and data sources. It defines:
+The project includes two built-in tools that require no external services or API keys:
 
-- **Tools**: Functions the AI can call (search, database queries, etc.)
-- **Resources**: Data sources the AI can read
-- **Transport**: How messages are sent (stdio, SSE, etc.)
+#### DuckDuckGo Search Tool
 
-### MCP in This Project
+```python
+class DuckDuckGoSearchTool(BaseTool):
+    name: str = "search"
+    description: str = "Search the web using DuckDuckGo..."
 
+    def _run(self, query: str) -> str:
+        from duckduckgo_search import DDGS
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=10))
+        # Format and return results
 ```
-┌─────────────┐     SSE      ┌──────────────────┐    stdio    ┌─────────────────┐
-│   CrewAI    │◄────────────►│   Supergateway   │◄───────────►│  duckduckgo-    │
-│   Agents    │              │   (SSE proxy)    │             │  mcp-server     │
-└─────────────┘              └──────────────────┘             └─────────────────┘
+
+#### Web Fetch Tool
+
+```python
+class WebFetchTool(BaseTool):
+    name: str = "fetch"
+    description: str = "Fetch and extract content from a web page URL..."
+
+    def _run(self, url: str) -> str:
+        # Fetch URL and extract text content
+        # Returns cleaned text from the page
 ```
 
-### Why SSE Transport?
+### Alternative Search Providers
 
-- **Server-Sent Events (SSE)** allows long-lived HTTP connections
-- AI agents can receive streaming responses from tools
-- Works through standard HTTP infrastructure (proxies, load balancers)
+You can use alternative search providers by setting environment variables:
 
-### Adding More MCP Servers
+| Provider | Environment Variable | Notes |
+|----------|---------------------|-------|
+| DuckDuckGo (default) | None needed | Free, no signup required |
+| Tavily | `MCP_SERVER_URL=https://mcp.tavily.com/mcp/?tavilyApiKey=YOUR_KEY` | AI-optimized search |
+| Serper (Google) | `SERPER_API_KEY=your_key` | Google search results |
 
-To add additional MCP tools, you can run multiple supergateway instances or use MCP servers that support SSE natively:
+### Why Not MCP Gateway?
 
-```yaml
-services:
-  another-mcp-server:
-    image: supercorp/supergateway:uvx
-    command:
-      - --stdio
-      - uvx another-mcp-server
-      - --port
-      - "8001"
-```
+The original implementation used an MCP server for DuckDuckGo search, but this approach had issues:
+- **Bot detection**: DuckDuckGo's bot detection would block requests from containerized environments
+- **Rate limiting**: The MCP server was subject to aggressive rate limits
+- **Complexity**: Required an additional container (supergateway) to run
+
+The direct Python library approach is simpler and more reliable.
 
 ---
 
@@ -447,29 +431,17 @@ Error: Could not connect to MODEL_RUNNER_URL
 3. Enable "Enable inference with TCP"
 4. Restart Docker Desktop
 
-### Issue: MCP Gateway Health Check Fails
+### Issue: Search Rate Limiting
 
 **Symptom:**
 ```
-mcp-gateway-1  | unhealthy
+Search rate limit reached. Please wait a moment and try again.
 ```
 
 **Solution:**
-- Wait longer - the first startup may take time to download dependencies
-- Check if port 8000 is available
-- View logs: `docker compose logs mcp-gateway`
-
-### Issue: Agents Can't Find Tools
-
-**Symptom:**
-```
-Available MCP tools []
-```
-
-**Solution:**
-1. Verify MCP Gateway is healthy: `docker compose ps`
-2. Check the SSE endpoint: `curl http://localhost:8000/sse`
-3. Ensure `MCP_SERVER_URL` environment variable is set correctly
+- Wait a few seconds between searches
+- Use more specific search queries
+- Consider using Tavily or Serper for production workloads (requires API key)
 
 ### Issue: Out of Memory
 
